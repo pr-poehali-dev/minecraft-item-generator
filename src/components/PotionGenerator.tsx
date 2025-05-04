@@ -19,6 +19,9 @@ export const PotionGenerator = () => {
   const [command, setCommand] = useState('');
   const [effects, setEffects] = useState<Array<{id: string, duration: number, amplifier: number}>>([]);
   const [customColor, setCustomColor] = useState('#FF0000');
+  const [tempEffectId, setTempEffectId] = useState('');
+  const [tempEffectAmplifier, setTempEffectAmplifier] = useState(0);
+  const [tempEffectDuration, setTempEffectDuration] = useState(3600);
   
   // Списки типов зелий и эффектов
   const potionTypes = [
@@ -148,29 +151,41 @@ export const PotionGenerator = () => {
     return effectIdMap[id] || 1; // По умолчанию 1 (speed)
   };
 
-  const addEffect = (id: string) => {
-    const effect = potionEffects.find(e => e.id === id);
+  const addEffect = () => {
+    if (!tempEffectId) return;
+    
+    const effect = potionEffects.find(e => e.id === tempEffectId);
     if (!effect) return;
     
+    // Проверка корректности силы эффекта
+    let amplifier = tempEffectAmplifier;
+    if (amplifier < 0) amplifier = 0;
+    if (amplifier > effect.maxAmplifier) amplifier = effect.maxAmplifier;
+    
     // Проверяем, есть ли уже такой эффект
-    const existingIndex = effects.findIndex(e => e.id === id);
+    const existingIndex = effects.findIndex(e => e.id === tempEffectId);
     if (existingIndex !== -1) {
-      // Если есть - увеличиваем уровень
+      // Если есть - заменяем его
       const newEffects = [...effects];
-      const currentAmplifier = newEffects[existingIndex].amplifier;
-      
-      if (currentAmplifier < effect.maxAmplifier) {
-        newEffects[existingIndex].amplifier = currentAmplifier + 1;
-        setEffects(newEffects);
-      }
+      newEffects[existingIndex] = { 
+        id: tempEffectId, 
+        duration: tempEffectDuration, 
+        amplifier: amplifier
+      };
+      setEffects(newEffects);
     } else {
       // Если нет - добавляем новый
       setEffects([...effects, { 
-        id, 
-        duration: effect.defaultDuration, 
-        amplifier: 0 // Начальный уровень эффекта (0 = I, 1 = II и т.д.)
+        id: tempEffectId, 
+        duration: tempEffectDuration, 
+        amplifier: amplifier
       }]);
     }
+    
+    // Сбросить временные значения
+    setTempEffectId('');
+    setTempEffectAmplifier(0);
+    setTempEffectDuration(3600);
   };
 
   const removeEffect = (index: number) => {
@@ -179,10 +194,13 @@ export const PotionGenerator = () => {
     setEffects(newEffects);
   };
 
-  const updateEffectDuration = (index: number, duration: number) => {
-    const newEffects = [...effects];
-    newEffects[index].duration = duration;
-    setEffects(newEffects);
+  const selectEffectForSettings = (id: string) => {
+    setTempEffectId(id);
+    const effect = potionEffects.find(e => e.id === id);
+    if (effect) {
+      setTempEffectDuration(effect.defaultDuration);
+      setTempEffectAmplifier(0); // По умолчанию начинаем с 0 (I уровень)
+    }
   };
 
   return (
@@ -253,43 +271,163 @@ export const PotionGenerator = () => {
                 </div>
               </div>
               
-              <div className="flex flex-wrap gap-2 mb-4">
-                {effects.map((effect, index) => {
-                  const effectInfo = potionEffects.find(e => e.id === effect.id);
-                  return (
-                    <div key={index} className="flex flex-col p-2 bg-gray-900 rounded-md border border-gray-700 w-full">
-                      <div className="flex items-center justify-between">
-                        <Badge className="py-1 px-2 bg-green-700">
-                          {effectInfo?.name || effect.id} {effect.amplifier + 1}
-                        </Badge>
-                        <button 
-                          className="text-gray-400 hover:text-gray-200"
-                          onClick={() => removeEffect(index)}
-                        >
-                          <Icon name="X" size={14} />
-                        </button>
+              <div className="p-4 bg-gray-900/50 rounded-lg border border-gray-700 mb-4">
+                <h3 className="text-lg font-medium mb-3">Добавить эффект</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                  <div>
+                    <Label className="mb-1 block">Выберите эффект</Label>
+                    <Select value={tempEffectId} onValueChange={selectEffectForSettings}>
+                      <SelectTrigger className="bg-gray-900 border-gray-700">
+                        <SelectValue placeholder="Выберите эффект" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-gray-900 border-gray-700 max-h-80">
+                        {potionEffects.map(effect => (
+                          <SelectItem key={effect.id} value={effect.id}>
+                            {effect.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div>
+                    <Label className="mb-1 block">Сила эффекта (уровень)</Label>
+                    <div className="flex items-center space-x-3">
+                      <Button 
+                        variant="outline" 
+                        size="icon" 
+                        className="bg-gray-900 border-gray-700 h-10 w-10"
+                        onClick={() => setTempEffectAmplifier(prev => Math.max(0, prev - 1))}
+                        disabled={tempEffectAmplifier <= 0 || !tempEffectId}
+                      >
+                        <Icon name="Minus" size={16} />
+                      </Button>
+                      
+                      <div className="bg-gray-900 border border-gray-700 text-center rounded-md p-2 flex-1">
+                        {tempEffectId ? (
+                          <span>
+                            {tempEffectAmplifier === 0 
+                              ? 'I' 
+                              : tempEffectAmplifier === 1 
+                                ? 'II' 
+                                : tempEffectAmplifier === 2 
+                                  ? 'III' 
+                                  : tempEffectAmplifier === 3 
+                                    ? 'IV' 
+                                    : tempEffectAmplifier === 4 
+                                      ? 'V' 
+                                      : `${tempEffectAmplifier + 1}`
+                            }
+                          </span>
+                        ) : (
+                          <span className="text-gray-500">Выберите эффект</span>
+                        )}
                       </div>
                       
-                      <div className="mt-2">
-                        <div className="flex items-center justify-between text-xs text-gray-400">
-                          <span>Длительность: {(effect.duration / 20).toFixed(1)} сек</span>
-                          <span>{effect.duration} тиков</span>
-                        </div>
-                        <Slider 
-                          min={1} 
-                          max={effect.id.includes('instant') ? 1 : 72000} 
-                          step={20} 
-                          value={[effect.duration]} 
-                          onValueChange={(values) => updateEffectDuration(index, values[0])} 
-                          className="mt-1 bg-gray-800"
-                        />
-                      </div>
+                      <Button 
+                        variant="outline" 
+                        size="icon" 
+                        className="bg-gray-900 border-gray-700 h-10 w-10"
+                        onClick={() => {
+                          const maxLevel = tempEffectId ? 
+                            potionEffects.find(e => e.id === tempEffectId)?.maxAmplifier || 5 : 5;
+                          setTempEffectAmplifier(prev => Math.min(maxLevel, prev + 1));
+                        }}
+                        disabled={!tempEffectId || tempEffectAmplifier >= (potionEffects.find(e => e.id === tempEffectId)?.maxAmplifier || 0)}
+                      >
+                        <Icon name="Plus" size={16} />
+                      </Button>
                     </div>
-                  );
-                })}
-                {effects.length === 0 && (
-                  <p className="text-gray-400 text-sm">Нет эффектов. Добавьте эффекты из списка ниже.</p>
+                  </div>
+                  
+                  <div className="flex items-end">
+                    <Button 
+                      onClick={addEffect}
+                      className="w-full bg-green-600 hover:bg-green-700"
+                      disabled={!tempEffectId}
+                    >
+                      <Icon name="Plus" className="mr-2" size={16} />
+                      Добавить эффект
+                    </Button>
+                  </div>
+                </div>
+                
+                {tempEffectId && !tempEffectId.includes('instant') && (
+                  <div className="space-y-2 mt-4">
+                    <div className="flex items-center justify-between">
+                      <Label>Длительность</Label>
+                      <span className="text-sm text-gray-400">{(tempEffectDuration / 20).toFixed(1)} сек ({tempEffectDuration} тиков)</span>
+                    </div>
+                    <Slider 
+                      min={20} 
+                      max={72000} 
+                      step={20} 
+                      value={[tempEffectDuration]} 
+                      onValueChange={(values) => setTempEffectDuration(values[0])} 
+                      className="bg-gray-800"
+                    />
+                  </div>
                 )}
+              </div>
+              
+              <div className="space-y-3">
+                <Label>Активные эффекты:</Label>
+                <div className="flex flex-col gap-2">
+                  {effects.map((effect, index) => {
+                    const effectInfo = potionEffects.find(e => e.id === effect.id);
+                    const levelRoman = effect.amplifier === 0 
+                      ? 'I' 
+                      : effect.amplifier === 1 
+                        ? 'II' 
+                        : effect.amplifier === 2 
+                          ? 'III' 
+                          : effect.amplifier === 3 
+                            ? 'IV' 
+                            : effect.amplifier === 4 
+                              ? 'V' 
+                              : `${effect.amplifier + 1}`;
+                    
+                    return (
+                      <div key={index} className="flex flex-col p-2 bg-gray-900 rounded-md border border-gray-700 w-full">
+                        <div className="flex items-center justify-between">
+                          <Badge className={`py-1 px-2 ${effect.id.includes('poison') || effect.id.includes('wither') || effect.id.includes('weakness') ? 'bg-red-700' : 'bg-green-700'}`}>
+                            {effectInfo?.name || effect.id} {levelRoman}
+                          </Badge>
+                          <button 
+                            className="text-gray-400 hover:text-gray-200"
+                            onClick={() => removeEffect(index)}
+                          >
+                            <Icon name="X" size={14} />
+                          </button>
+                        </div>
+                        
+                        {!effect.id.includes('instant') && (
+                          <div className="mt-2">
+                            <div className="flex items-center justify-between text-xs text-gray-400">
+                              <span>Длительность: {(effect.duration / 20).toFixed(1)} сек</span>
+                              <span>{effect.duration} тиков</span>
+                            </div>
+                            <Slider 
+                              min={20} 
+                              max={72000} 
+                              step={20} 
+                              value={[effect.duration]} 
+                              onValueChange={(values) => {
+                                const newEffects = [...effects];
+                                newEffects[index].duration = values[0];
+                                setEffects(newEffects);
+                              }} 
+                              className="mt-1 bg-gray-800"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {effects.length === 0 && (
+                    <p className="text-gray-400 text-sm">Нет эффектов. Добавьте эффекты из списка выше.</p>
+                  )}
+                </div>
               </div>
               
               <Tabs defaultValue="positive">
@@ -299,7 +437,7 @@ export const PotionGenerator = () => {
                 </TabsList>
                 
                 <TabsContent value="positive" className="mt-4">
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                     {potionEffects.filter(effect => 
                       !['slowness', 'mining_fatigue', 'nausea', 'blindness', 'hunger', 'weakness', 'poison', 'wither', 'instant_damage', 'bad_omen']
                       .some(id => effect.id.includes(id))
@@ -309,7 +447,7 @@ export const PotionGenerator = () => {
                         variant="outline"
                         size="sm"
                         className="justify-start bg-gray-900 hover:bg-gray-800 border-gray-700"
-                        onClick={() => addEffect(effect.id)}
+                        onClick={() => selectEffectForSettings(effect.id)}
                       >
                         <span className="text-xs truncate">{effect.name}</span>
                       </Button>
@@ -318,7 +456,7 @@ export const PotionGenerator = () => {
                 </TabsContent>
                 
                 <TabsContent value="negative" className="mt-4">
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                     {potionEffects.filter(effect => 
                       ['slowness', 'mining_fatigue', 'nausea', 'blindness', 'hunger', 'weakness', 'poison', 'wither', 'instant_damage', 'bad_omen']
                       .some(id => effect.id.includes(id))
@@ -328,7 +466,7 @@ export const PotionGenerator = () => {
                         variant="outline"
                         size="sm"
                         className="justify-start bg-gray-900 hover:bg-gray-800 border-gray-700"
-                        onClick={() => addEffect(effect.id)}
+                        onClick={() => selectEffectForSettings(effect.id)}
                       >
                         <span className="text-xs truncate">{effect.name}</span>
                       </Button>

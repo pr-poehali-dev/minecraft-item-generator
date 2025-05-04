@@ -25,6 +25,8 @@ export const ItemGenerator = () => {
   const [lore, setLore] = useState('');
   const [glowing, setGlowing] = useState(false);
   const [hideFlags, setHideFlags] = useState(false);
+  const [tempEnchantId, setTempEnchantId] = useState('');
+  const [tempEnchantLevel, setTempEnchantLevel] = useState(1);
   
   // Справочник предметов по категориям
   const itemCategories = {
@@ -221,30 +223,46 @@ export const ItemGenerator = () => {
     setCommand(cmd);
   };
 
-  const addEnchantment = (id: string) => {
-    // Найдем максимальный уровень для этого зачарования
-    const enchantment = enchantmentsList.find(e => e.id === id);
+  const addEnchantment = () => {
+    if (!tempEnchantId) return;
+    
+    const enchantment = enchantmentsList.find(e => e.id === tempEnchantId);
     if (!enchantment) return;
     
+    // Проверка корректности уровня зачарования
+    let level = tempEnchantLevel;
+    if (level < 1) level = 1;
+    if (level > enchantment.maxLevel) level = enchantment.maxLevel;
+    
     // Проверяем, есть ли уже такое зачарование
-    const existingIndex = enchantments.findIndex(e => e.id === id);
+    const existingIndex = enchantments.findIndex(e => e.id === tempEnchantId);
     if (existingIndex !== -1) {
-      // Если есть, но можно повысить уровень - повышаем
-      if (enchantments[existingIndex].level < enchantment.maxLevel) {
-        const newEnchantments = [...enchantments];
-        newEnchantments[existingIndex].level += 1;
-        setEnchantments(newEnchantments);
-      }
+      // Если есть - заменяем
+      const newEnchantments = [...enchantments];
+      newEnchantments[existingIndex].level = level;
+      setEnchantments(newEnchantments);
     } else {
-      // Если нет - добавляем с 1 уровнем
-      setEnchantments([...enchantments, { id, level: 1 }]);
+      // Если нет - добавляем новое
+      setEnchantments([...enchantments, { id: tempEnchantId, level }]);
     }
+    
+    // Сбрасываем временные значения
+    setTempEnchantId('');
+    setTempEnchantLevel(1);
   };
 
   const removeEnchantment = (index: number) => {
     const newEnchantments = [...enchantments];
     newEnchantments.splice(index, 1);
     setEnchantments(newEnchantments);
+  };
+
+  const selectEnchantForLevel = (id: string) => {
+    setTempEnchantId(id);
+    const enchantment = enchantmentsList.find(e => e.id === id);
+    if (enchantment) {
+      setTempEnchantLevel(1); // По умолчанию начинаем с 1 уровня
+    }
   };
 
   return (
@@ -345,10 +363,91 @@ export const ItemGenerator = () => {
                   )}
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-3">
-                    <Label>Боевые зачарования</Label>
-                    <div className="grid grid-cols-2 gap-2">
+                <div className="p-4 bg-gray-900/50 rounded-lg border border-gray-700 mb-4">
+                  <h3 className="text-lg font-medium mb-3">Добавить зачарование</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                      <Label className="mb-1 block">Выберите зачарование</Label>
+                      <Select value={tempEnchantId} onValueChange={selectEnchantForLevel}>
+                        <SelectTrigger className="bg-gray-900 border-gray-700">
+                          <SelectValue placeholder="Выберите зачарование" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-gray-900 border-gray-700 max-h-80">
+                          {enchantmentsList.map(enchant => (
+                            <SelectItem key={enchant.id} value={enchant.id}>
+                              {enchant.name} (макс. {enchant.maxLevel})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div>
+                      <Label className="mb-1 block">Уровень зачарования</Label>
+                      <div className="flex items-center space-x-3">
+                        <Button 
+                          variant="outline" 
+                          size="icon" 
+                          className="bg-gray-900 border-gray-700 h-10 w-10"
+                          onClick={() => setTempEnchantLevel(prev => Math.max(1, prev - 1))}
+                          disabled={tempEnchantLevel <= 1}
+                        >
+                          <Icon name="Minus" size={16} />
+                        </Button>
+                        
+                        <Input 
+                          type="number" 
+                          value={tempEnchantLevel}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value);
+                            if (!isNaN(val)) {
+                              setTempEnchantLevel(val);
+                            }
+                          }}
+                          min={1}
+                          max={tempEnchantId ? enchantmentsList.find(e => e.id === tempEnchantId)?.maxLevel || 5 : 5}
+                          className="bg-gray-900 border-gray-700 text-center"
+                        />
+                        
+                        <Button 
+                          variant="outline" 
+                          size="icon" 
+                          className="bg-gray-900 border-gray-700 h-10 w-10"
+                          onClick={() => {
+                            const maxLevel = tempEnchantId ? 
+                              enchantmentsList.find(e => e.id === tempEnchantId)?.maxLevel || 5 : 5;
+                            setTempEnchantLevel(prev => Math.min(maxLevel, prev + 1));
+                          }}
+                          disabled={!tempEnchantId || tempEnchantLevel >= (enchantmentsList.find(e => e.id === tempEnchantId)?.maxLevel || 5)}
+                        >
+                          <Icon name="Plus" size={16} />
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-end">
+                      <Button 
+                        onClick={addEnchantment}
+                        className="w-full bg-indigo-600 hover:bg-indigo-700"
+                        disabled={!tempEnchantId}
+                      >
+                        <Icon name="Plus" className="mr-2" size={16} />
+                        Добавить зачарование
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                
+                <Tabs defaultValue="battle">
+                  <TabsList className="grid grid-cols-4 bg-gray-900/70">
+                    <TabsTrigger value="battle">Боевые</TabsTrigger>
+                    <TabsTrigger value="protection">Защитные</TabsTrigger>
+                    <TabsTrigger value="tool">Инструменты</TabsTrigger>
+                    <TabsTrigger value="special">Специальные</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="battle" className="mt-3">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                       {enchantmentsList.filter(e => 
                         ['sharpness', 'smite', 'bane_of_arthropods', 'knockback', 'fire_aspect', 'looting', 'sweeping', 'power', 'punch', 'flame', 'infinity']
                         .some(id => e.id.includes(id))
@@ -358,17 +457,16 @@ export const ItemGenerator = () => {
                           variant="outline"
                           size="sm"
                           className="justify-start bg-gray-900 hover:bg-gray-800 border-gray-700"
-                          onClick={() => addEnchantment(enchant.id)}
+                          onClick={() => selectEnchantForLevel(enchant.id)}
                         >
                           <span className="text-xs truncate">{enchant.name}</span>
                         </Button>
                       ))}
                     </div>
-                  </div>
+                  </TabsContent>
                   
-                  <div className="space-y-3">
-                    <Label>Защитные зачарования</Label>
-                    <div className="grid grid-cols-2 gap-2">
+                  <TabsContent value="protection" className="mt-3">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                       {enchantmentsList.filter(e => 
                         ['protection', 'fire_protection', 'feather_falling', 'blast_protection', 'projectile_protection', 'respiration', 'aqua_affinity', 'thorns']
                         .some(id => e.id.includes(id))
@@ -378,17 +476,16 @@ export const ItemGenerator = () => {
                           variant="outline"
                           size="sm"
                           className="justify-start bg-gray-900 hover:bg-gray-800 border-gray-700"
-                          onClick={() => addEnchantment(enchant.id)}
+                          onClick={() => selectEnchantForLevel(enchant.id)}
                         >
                           <span className="text-xs truncate">{enchant.name}</span>
                         </Button>
                       ))}
                     </div>
-                  </div>
+                  </TabsContent>
                   
-                  <div className="space-y-3">
-                    <Label>Инструментальные зачарования</Label>
-                    <div className="grid grid-cols-2 gap-2">
+                  <TabsContent value="tool" className="mt-3">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                       {enchantmentsList.filter(e => 
                         ['efficiency', 'silk_touch', 'unbreaking', 'fortune', 'mending']
                         .some(id => e.id.includes(id))
@@ -398,17 +495,16 @@ export const ItemGenerator = () => {
                           variant="outline"
                           size="sm"
                           className="justify-start bg-gray-900 hover:bg-gray-800 border-gray-700"
-                          onClick={() => addEnchantment(enchant.id)}
+                          onClick={() => selectEnchantForLevel(enchant.id)}
                         >
                           <span className="text-xs truncate">{enchant.name}</span>
                         </Button>
                       ))}
                     </div>
-                  </div>
+                  </TabsContent>
                   
-                  <div className="space-y-3">
-                    <Label>Специальные зачарования</Label>
-                    <div className="grid grid-cols-2 gap-2">
+                  <TabsContent value="special" className="mt-3">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                       {enchantmentsList.filter(e => 
                         ['curse', 'depth_strider', 'frost_walker', 'soul_speed', 'swift_sneak', 'loyalty', 'impaling', 'riptide', 'channeling', 'multishot', 'quick_charge', 'piercing']
                         .some(id => e.id.includes(id))
@@ -418,14 +514,14 @@ export const ItemGenerator = () => {
                           variant="outline"
                           size="sm"
                           className="justify-start bg-gray-900 hover:bg-gray-800 border-gray-700"
-                          onClick={() => addEnchantment(enchant.id)}
+                          onClick={() => selectEnchantForLevel(enchant.id)}
                         >
                           <span className="text-xs truncate">{enchant.name}</span>
                         </Button>
                       ))}
                     </div>
-                  </div>
-                </div>
+                  </TabsContent>
+                </Tabs>
               </TabsContent>
               
               <TabsContent value="appearance" className="space-y-6 mt-4">
